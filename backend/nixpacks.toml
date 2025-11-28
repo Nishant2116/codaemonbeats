@@ -1,0 +1,5 @@
+[start]
+cmd = "bash start.sh"
+
+[build]
+modules = ["python-3.13"]
