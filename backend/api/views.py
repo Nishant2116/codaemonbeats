@@ -13,6 +13,9 @@ import random
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def register_user(request):
+    print(f"Register Request Data: {request.data}")
+    print(f"Register Request Headers: {request.headers}")
+    
     username = request.data.get('username')
     password = request.data.get('password')
     email = request.data.get('email')
