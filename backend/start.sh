@@ -9,4 +9,4 @@ python manage.py migrate --noinput
 python manage.py collectstatic --noinput
 
 # Start gunicorn
-gunicorn codeamon_audio_app.wsgi --log-file -
+gunicorn codeamon_audio_app.wsgi:application --bind 0.0.0.0:$PORT --log-file -
