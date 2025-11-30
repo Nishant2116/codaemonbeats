@@ -24,12 +24,22 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-3#_ew0s1lb1q#^!f5_9=-4hu212=ukr8%%*r8q4y+6)5z4u#fu')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get('DEBUG', 'True') == 'True'
+DEBUG = True # Temporarily enable debug for better errors
 
 # Fix for Railway/Proxy SSL
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 ALLOWED_HOSTS = ['*']
+
+# ... (skip to CORS/CSRF section)
+
+# CORS Settings
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_CREDENTIALS = True
+
+# CSRF Settings
+# Allow all origins for CSRF (Not recommended for prod but requested for fix)
+CSRF_TRUSTED_ORIGINS = ['https://*', 'http://*']
 
 
 # Application definition
@@ -136,7 +146,8 @@ CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
 
 # CSRF Settings
-CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS
+# CSRF Settings
+CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in os.environ.get('CORS_ALLOWED_ORIGINS', 'http://localhost:5173').split(',')]
 
 # Trigger redeploy
 
