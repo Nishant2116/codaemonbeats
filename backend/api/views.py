@@ -83,97 +83,97 @@ class GenerateSongView(generics.CreateAPIView):
         print(f"Generate Request Data: {request.data}")
         try:
             prompt = request.data.get('prompt')
-        title = request.data.get('title', 'Untitled Creation')
-        genre = request.data.get('genre', 'pop').lower()
-        voice_gender = request.data.get('voice', 'female').lower()
-        
-        # Select Voice
-        # Male: en-US-ChristopherNeural, Female: en-US-AriaNeural
-        voice_name = 'en-US-ChristopherNeural' if voice_gender == 'male' else 'en-US-AriaNeural'
+            title = request.data.get('title', 'Untitled Creation')
+            genre = request.data.get('genre', 'pop').lower()
+            voice_gender = request.data.get('voice', 'female').lower()
+            
+            # Select Voice
+            # Male: en-US-ChristopherNeural, Female: en-US-AriaNeural
+            voice_name = 'en-US-ChristopherNeural' if voice_gender == 'male' else 'en-US-AriaNeural'
 
-        # 1. Generate Speech using edge-tts
-        speech_path = None
-        try:
-            with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as f:
-                speech_path = f.name
+            # 1. Generate Speech using edge-tts
+            speech_path = None
+            try:
+                with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as f:
+                    speech_path = f.name
+                
+                # Run edge-tts CLI
+                command = ['edge-tts', '--text', prompt, '--write-media', speech_path, '--voice', voice_name]
+                subprocess.run(command, check=True)
+                
+            except Exception as e:
+                print(f"TTS Failed: {e}")
+                if speech_path and os.path.exists(speech_path):
+                    os.unlink(speech_path)
+                speech_path = None
+
+            # 2. Load Beat
+            beat_path = os.path.join('media', 'beats', f'{genre}.mp3')
+            if not os.path.exists(beat_path):
+                beat_path = os.path.join('media', 'beats', 'pop.mp3') # Fallback
             
-            # Run edge-tts CLI
-            command = ['edge-tts', '--text', prompt, '--write-media', speech_path, '--voice', voice_name]
-            subprocess.run(command, check=True)
+            # 3. Mix using ffmpeg (subprocess)
+            audio_content = None
+            if speech_path and os.path.exists(beat_path):
+                try:
+                    # Mix beat (vol 0.6) and speech (vol 1.5), cut to shortest duration
+                    command = [
+                        'ffmpeg', '-y',
+                        '-i', beat_path,
+                        '-i', speech_path,
+                        '-filter_complex', '[0:a]volume=0.6[a];[1:a]volume=1.5[b];[a][b]amix=inputs=2:duration=shortest',
+                        '-f', 'mp3',
+                        'pipe:1'
+                    ]
+                    result = subprocess.run(command, capture_output=True, check=True)
+                    audio_content = result.stdout
+                except Exception as e:
+                    print(f"FFmpeg Mixing Failed: {e}")
             
-        except Exception as e:
-            print(f"TTS Failed: {e}")
+            # Cleanup speech file
             if speech_path and os.path.exists(speech_path):
                 os.unlink(speech_path)
-            speech_path = None
 
-        # 2. Load Beat
-        beat_path = os.path.join('media', 'beats', f'{genre}.mp3')
-        if not os.path.exists(beat_path):
-            beat_path = os.path.join('media', 'beats', 'pop.mp3') # Fallback
-        
-        # 3. Mix using ffmpeg (subprocess)
-        audio_content = None
-        if speech_path and os.path.exists(beat_path):
+            # Fallback if mixing failed
+            if not audio_content:
+                if os.path.exists(beat_path):
+                    with open(beat_path, 'rb') as f:
+                        audio_content = f.read()
+                else:
+                    audio_content = b'MOCK AUDIO CONTENT'
+
+            # 5. Fetch Cover Image
             try:
-                # Mix beat (vol 0.6) and speech (vol 1.5), cut to shortest duration
-                command = [
-                    'ffmpeg', '-y',
-                    '-i', beat_path,
-                    '-i', speech_path,
-                    '-filter_complex', '[0:a]volume=0.6[a];[1:a]volume=1.5[b];[a][b]amix=inputs=2:duration=shortest',
-                    '-f', 'mp3',
-                    'pipe:1'
-                ]
-                result = subprocess.run(command, capture_output=True, check=True)
-                audio_content = result.stdout
-            except Exception as e:
-                print(f"FFmpeg Mixing Failed: {e}")
-        
-        # Cleanup speech file
-        if speech_path and os.path.exists(speech_path):
-            os.unlink(speech_path)
-
-        # Fallback if mixing failed
-        if not audio_content:
-            if os.path.exists(beat_path):
-                with open(beat_path, 'rb') as f:
-                    audio_content = f.read()
-            else:
-                audio_content = b'MOCK AUDIO CONTENT'
-
-        # 5. Fetch Cover Image
-        try:
-            img_response = requests.get(f"https://picsum.photos/seed/{random.randint(0, 10000)}/500")
-            if img_response.status_code == 200:
-                cover_content = img_response.content
-            else:
+                img_response = requests.get(f"https://picsum.photos/seed/{random.randint(0, 10000)}/500")
+                if img_response.status_code == 200:
+                    cover_content = img_response.content
+                else:
+                    cover_content = None
+            except:
                 cover_content = None
-        except:
-            cover_content = None
 
-        file_name = f"generated_{random.randint(1000, 9999)}.mp3"
-        cover_name = f"cover_{random.randint(1000, 9999)}.jpg"
-        
-        generated_song = GeneratedSong.objects.create(
-            user=request.user,
-            title=title,
-            prompt=prompt,
-        )
-        generated_song.audio_file.save(file_name, ContentFile(audio_content), save=False)
-        
-        if cover_content:
-            generated_song.cover_image.save(cover_name, ContentFile(cover_content), save=False)
+            file_name = f"generated_{random.randint(1000, 9999)}.mp3"
+            cover_name = f"cover_{random.randint(1000, 9999)}.jpg"
             
-        generated_song.save()
-        
+            generated_song = GeneratedSong.objects.create(
+                user=request.user,
+                title=title,
+                prompt=prompt,
+            )
+            generated_song.audio_file.save(file_name, ContentFile(audio_content), save=False)
+            
+            if cover_content:
+                generated_song.cover_image.save(cover_name, ContentFile(cover_content), save=False)
+                
+            generated_song.save()
+            
+            serializer = self.get_serializer(generated_song)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
         except Exception as e:
             import traceback
             traceback.print_exc()
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-        serializer = self.get_serializer(generated_song)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 from rest_framework import mixins
 
