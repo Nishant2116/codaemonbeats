@@ -10,6 +10,11 @@ from .models import Song, GeneratedSong, Playlist
 from .serializers import UserSerializer, SongSerializer, GeneratedSongSerializer, PlaylistSerializer
 import random
 
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def ping(request):
+    return Response({'status': 'ok', 'message': 'Server is running!'})
+
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def register_user(request):
@@ -75,7 +80,9 @@ class GenerateSongView(generics.CreateAPIView):
     permission_classes = [IsAuthenticated]
 
     def create(self, request, *args, **kwargs):
-        prompt = request.data.get('prompt')
+        print(f"Generate Request Data: {request.data}")
+        try:
+            prompt = request.data.get('prompt')
         title = request.data.get('title', 'Untitled Creation')
         genre = request.data.get('genre', 'pop').lower()
         voice_gender = request.data.get('voice', 'female').lower()
@@ -160,6 +167,11 @@ class GenerateSongView(generics.CreateAPIView):
             
         generated_song.save()
         
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
         serializer = self.get_serializer(generated_song)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
